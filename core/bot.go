@@ -620,52 +620,55 @@ func (c *Client) autoCompleteTask(query string) float64 {
 
 	if mainTask != nil {
 		for _, task := range mainTask {
-			taskMap := task.(map[string]interface{})
-			taskId, err := c.startTask(taskMap["id"].(string))
-			if err != nil {
-				tools.Logger("error", fmt.Sprintf("| %s | Failed to start task: %v", c.Account.Username, err))
-			}
+			if task != nil {
 
-			if taskId != "" {
-				tools.Logger("success", fmt.Sprintf("| %s | Start Task %s Successfully | Sleep 5s Before Claim Task...", c.Account.Username, taskMap["name"].(string)))
-
-				time.Sleep(5 * time.Second)
-
-				claimTask, err := c.claimTask(taskId)
+				taskMap := task.(map[string]interface{})
+				taskId, err := c.startTask(taskMap["id"].(string))
 				if err != nil {
-					tools.Logger("error", fmt.Sprintf("| %s | Failed to claim task: %v", c.Account.Username, err))
+					tools.Logger("error", fmt.Sprintf("| %s | Failed to start task: %v", c.Account.Username, err))
 				}
 
-				if claimTask != nil {
-					if status, exits := claimTask["data"].(map[string]interface{}); exits {
-						if status["completed"].(bool) {
-							tools.Logger("success", fmt.Sprintf("| %s | Claim Task %s Successfully | Sleep 15s Before Next Task...", c.Account.Username, taskMap["name"].(string)))
+				if taskId != "" {
+					tools.Logger("success", fmt.Sprintf("| %s | Start Task %s Successfully | Sleep 5s Before Claim Task...", c.Account.Username, taskMap["name"].(string)))
+
+					time.Sleep(5 * time.Second)
+
+					claimTask, err := c.claimTask(taskId)
+					if err != nil {
+						tools.Logger("error", fmt.Sprintf("| %s | Failed to claim task: %v", c.Account.Username, err))
+					}
+
+					if claimTask != nil {
+						if status, exits := claimTask["data"].(map[string]interface{}); exits {
+							if status["completed"].(bool) {
+								tools.Logger("success", fmt.Sprintf("| %s | Claim Task %s Successfully | Sleep 15s Before Next Task...", c.Account.Username, taskMap["name"].(string)))
+							}
+						} else {
+							tools.Logger("error", fmt.Sprintf("| %s | Claim Task %s Failed | Status: %s | You Can Try Manual | Sleep 15s Before Next Task...", c.Account.Username, taskMap["name"].(string), claimTask["error"].(string)))
 						}
-					} else {
-						tools.Logger("error", fmt.Sprintf("| %s | Claim Task %s Failed | Status: %s | You Can Try Manual | Sleep 15s Before Next Task...", c.Account.Username, taskMap["name"].(string), claimTask["error"].(string)))
 					}
 				}
-			}
 
-			taskUser := taskMap["task_user"].(map[string]interface{})
-			if !taskUser["completed"].(bool) {
-				claimTask, err := c.claimTask(taskUser["id"].(string))
-				if err != nil {
-					tools.Logger("error", fmt.Sprintf("| %s | Failed to claim task %s: %v", c.Account.Username, taskMap["name"].(string), err))
-				}
+				taskUser := taskMap["task_user"].(map[string]interface{})
+				if !taskUser["completed"].(bool) {
+					claimTask, err := c.claimTask(taskUser["id"].(string))
+					if err != nil {
+						tools.Logger("error", fmt.Sprintf("| %s | Failed to claim task %s: %v", c.Account.Username, taskMap["name"].(string), err))
+					}
 
-				if claimTask != nil {
-					if status, exits := claimTask["data"].(map[string]interface{}); exits {
-						if status["completed"].(bool) {
-							tools.Logger("success", fmt.Sprintf("| %s | Claim Task %s Successfully | Sleep 15s Before Next Task...", c.Account.Username, taskMap["name"].(string)))
+					if claimTask != nil {
+						if status, exits := claimTask["data"].(map[string]interface{}); exits {
+							if status["completed"].(bool) {
+								tools.Logger("success", fmt.Sprintf("| %s | Claim Task %s Successfully | Sleep 15s Before Next Task...", c.Account.Username, taskMap["name"].(string)))
+							}
+						} else {
+							tools.Logger("error", fmt.Sprintf("| %s | Claim Task %s Failed | Status: %s | You Can Try Manual | Sleep 15s Before Next Task...", c.Account.Username, taskMap["name"].(string), claimTask["error"].(string)))
 						}
-					} else {
-						tools.Logger("error", fmt.Sprintf("| %s | Claim Task %s Failed | Status: %s | You Can Try Manual | Sleep 15s Before Next Task...", c.Account.Username, taskMap["name"].(string), claimTask["error"].(string)))
 					}
 				}
-			}
 
-			time.Sleep(15 * time.Second)
+				time.Sleep(15 * time.Second)
+			}
 		}
 	}
 
