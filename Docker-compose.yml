@@ -1,0 +1,7 @@
+version: '3'
+services:
+  binance-moon-bix:
+    image: seed-bot
+    container_name: seed-bot
+    restart: on-failure
+    network_mode: "host"

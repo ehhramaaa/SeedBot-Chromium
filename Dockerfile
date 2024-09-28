@@ -1,0 +1,49 @@
+################
+# BUILD BINARY #
+################
+
+# Gunakan versi Go yang spesifik untuk stabilitas
+FROM golang:1.23-alpine AS builder
+
+# Set working directory dalam container build
+WORKDIR /app
+
+# Copy go.mod dan go.sum terlebih dahulu untuk memanfaatkan cache layer Docker
+COPY go.mod go.sum ./
+
+# Download dependencies
+RUN go mod download
+
+# Copy seluruh kode ke dalam image
+COPY . .
+
+# Build aplikasi Go, menonaktifkan CGO dan mengoptimalkan ukuran binary
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/seed-bot .
+
+#####################
+# FINAL IMAGE #
+#####################
+
+# Menggunakan image Alpine yang ringan untuk menjalankan binary
+FROM alpine:3.16
+
+# Set working directory dalam container final
+WORKDIR /app
+
+# Salin binary yang sudah dibangun dari tahap builder
+COPY --from=builder /app/seed-bot /app/seed-bot
+
+# Salin file konfigurasi jika dibutuhkan (hanya yang diperlukan)
+COPY . /app/
+
+# Install Chromium dan dependencies lainnya
+RUN apk --no-cache add chromium
+
+# Menyertakan CA certificates jika aplikasi membutuhkan koneksi HTTPS
+RUN apk --no-cache add ca-certificates
+
+# Pastikan binary memiliki izin eksekusi
+RUN chmod +x /app/seed-bot
+
+# Set entrypoint untuk menjalankan aplikasi
+ENTRYPOINT [ "/app/seed-bot" ]
