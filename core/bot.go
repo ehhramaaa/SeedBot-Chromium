@@ -554,22 +554,19 @@ func (c *Client) autoCompleteTask(query string) float64 {
 	}
 
 	if wormStatus != nil {
-		endClaimWorm, err := time.Parse(time.RFC3339, wormStatus["ended_at"].(string))
-		if err != nil {
-			tools.Logger("error", fmt.Sprintf("| %s | Check Worm Failed | Failed to parse time: %v", c.Account.Username, err))
-		} else {
-			if endClaimWorm.Unix() < time.Now().Unix() {
-				catchWorm, err := c.catchWorm()
-				if err != nil {
-					tools.Logger("error", fmt.Sprintf("| %s | Failed to catch worm: %v", c.Account.Username, err))
-				}
-
-				if catchWorm != nil {
-					tools.Logger("success", fmt.Sprintf("| %s | Catch Worm Successfully | Worm Type: %s | Catch Status: %s", c.Account.Username, catchWorm["type"].(string), catchWorm["status"].(string)))
-				}
-			} else {
-				tools.Logger("info", fmt.Sprintf("| %s | Catch Worm After: %v", c.Account.Username, wormStatus["ended_at"]))
+		if !wormStatus["is_caught"].(bool) {
+			catchWorm, err := c.catchWorm()
+			if err != nil {
+				tools.Logger("error", fmt.Sprintf("| %s | Failed to catch worm: %v", c.Account.Username, err))
 			}
+
+			if catchWorm != nil {
+				tools.Logger("success", fmt.Sprintf("| %s | Catch Worm Successfully | Worm Type: %s | Catch Status: %s", c.Account.Username, catchWorm["type"].(string), catchWorm["status"].(string)))
+			} else {
+				tools.Logger("warning", fmt.Sprintf("| %s | Catch Worm Failed | Worm Type: %s | Catch Status: %s", c.Account.Username, catchWorm["type"].(string), catchWorm["status"].(string)))
+			}
+		} else {
+			tools.Logger("info", fmt.Sprintf("| %s | Catch Worm After: %v", c.Account.Username, wormStatus["ended_at"]))
 		}
 	}
 
