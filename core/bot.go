@@ -252,6 +252,7 @@ func (c *Client) getQueryData(session fs.DirEntry) (string, error) {
 	c.navigate(page, "https://web.telegram.org/k/")
 
 	page.MustWaitLoad()
+	page.MustWaitNavigation()
 
 	time.Sleep(2 * time.Second)
 
@@ -277,22 +278,21 @@ func (c *Client) getQueryData(session fs.DirEntry) (string, error) {
 
 	page.MustReload()
 	page.MustWaitLoad()
+	page.MustWaitNavigation()
 
-	time.Sleep(3 * time.Second)
+	time.Sleep(5 * time.Second)
 
-	isSessionExpired := c.checkElement(page, "#auth-pages")
+	isSessionExpired := c.checkElement(page, "#auth-pages > div > div.tabs-container.auth-pages__container > div.tabs-tab.page-signQR.active > div > div.input-wrapper > button")
 
 	if isSessionExpired {
 		tools.Logger("error", fmt.Sprintf("| %s | Session Expired Or Account Banned, Please Check Your Account...", c.Account.Phone))
 
-		tools.Logger("info", fmt.Sprintf("| %s | Move Session File To Expired Folder | You Can Try Get Local Storage Again After Check Account...", c.Account.Phone))
-
 		return "", fmt.Errorf("session expired or account banned")
 	}
 
-	tools.Logger("success", fmt.Sprintf("| %s | Login successfully | Sleep 5s Before Navigate...", c.Account.Phone))
+	tools.Logger("success", fmt.Sprintf("| %s | Login successfully | Sleep 3s Before Navigate...", c.Account.Phone))
 
-	time.Sleep(5 * time.Second)
+	time.Sleep(3 * time.Second)
 
 	tools.Logger("info", fmt.Sprintf("| %s | Navigating Telegram...", c.Account.Phone))
 
