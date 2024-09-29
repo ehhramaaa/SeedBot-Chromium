@@ -9,7 +9,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -241,7 +240,6 @@ func (c *Client) getQueryData(session fs.DirEntry) (string, error) {
 
 	// Set Local Storage
 	sessionsPath := "sessions"
-	sessionsExpired := "sessions/expired"
 
 	page := c.Browser.MustPage()
 
@@ -282,18 +280,12 @@ func (c *Client) getQueryData(session fs.DirEntry) (string, error) {
 
 	time.Sleep(3 * time.Second)
 
-	isSessionExpired := c.checkElement(page, "#auth-pages > div > div.tabs-container.auth-pages__container > div.tabs-tab.page-signQR.active > div > div.input-wrapper > button")
+	isSessionExpired := c.checkElement(page, "#auth-pages")
 
 	if isSessionExpired {
 		tools.Logger("error", fmt.Sprintf("| %s | Session Expired Or Account Banned, Please Check Your Account...", c.Account.Phone))
 
 		tools.Logger("info", fmt.Sprintf("| %s | Move Session File To Expired Folder | You Can Try Get Local Storage Again After Check Account...", c.Account.Phone))
-
-		if !tools.CheckFileOrFolderExits(sessionsExpired) {
-			os.Mkdir(sessionsExpired, 0755)
-		}
-
-		os.Rename(filepath.Join(sessionsPath, session.Name()), filepath.Join(sessionsExpired, session.Name()))
 
 		return "", fmt.Errorf("session expired or account banned")
 	}
@@ -744,38 +736,37 @@ func (c *Client) autoCompleteTask(query string) float64 {
 			if task != nil {
 				taskMap := task.(map[string]interface{})
 
-				taskUser := taskMap["task_user"].(map[string]interface{})
-				if taskUser == nil {
-					c.startTask(taskMap["id"].(string))
-				}
+				if taskUser, exits := taskMap["task_user"].(map[string]interface{}); exits && taskUser != nil {
+					if !taskUser["completed"].(bool) {
 
-				if !taskUser["completed"].(bool) {
-
-					taskId, err := c.startTask(taskMap["id"].(string))
-					if err != nil {
-						tools.Logger("error", fmt.Sprintf("| %s | Failed to start task: %v", c.Account.Username, err))
-					}
-
-					if taskId != "" {
-						tools.Logger("success", fmt.Sprintf("| %s | Start Task %s Successfully | Sleep 5s Before Claim Task...", c.Account.Username, taskMap["name"].(string)))
-
-						time.Sleep(5 * time.Second)
-
-						claimTask, err := c.claimTask(taskId)
+						taskId, err := c.startTask(taskMap["id"].(string))
 						if err != nil {
-							tools.Logger("error", fmt.Sprintf("| %s | Failed to claim task: %v", c.Account.Username, err))
+							tools.Logger("error", fmt.Sprintf("| %s | Failed to start task: %v", c.Account.Username, err))
 						}
 
-						if claimTask != nil {
-							if status, exits := claimTask["data"].(map[string]interface{}); exits {
-								if status["completed"].(bool) {
-									tools.Logger("success", fmt.Sprintf("| %s | Claim Task %s Successfully | Sleep 5s Before Next Task...", c.Account.Username, taskMap["name"].(string)))
+						if taskId != "" {
+							tools.Logger("success", fmt.Sprintf("| %s | Start Task %s Successfully | Sleep 5s Before Claim Task...", c.Account.Username, taskMap["name"].(string)))
+
+							time.Sleep(5 * time.Second)
+
+							claimTask, err := c.claimTask(taskId)
+							if err != nil {
+								tools.Logger("error", fmt.Sprintf("| %s | Failed to claim task: %v", c.Account.Username, err))
+							}
+
+							if claimTask != nil {
+								if status, exits := claimTask["data"].(map[string]interface{}); exits {
+									if status["completed"].(bool) {
+										tools.Logger("success", fmt.Sprintf("| %s | Claim Task %s Successfully | Sleep 5s Before Next Task...", c.Account.Username, taskMap["name"].(string)))
+									}
+								} else {
+									tools.Logger("error", fmt.Sprintf("| %s | Claim Task %s Failed | Status: %s | You Can Try Manual | Sleep 5s Before Next Task...", c.Account.Username, taskMap["name"].(string), claimTask["error"].(string)))
 								}
-							} else {
-								tools.Logger("error", fmt.Sprintf("| %s | Claim Task %s Failed | Status: %s | You Can Try Manual | Sleep 5s Before Next Task...", c.Account.Username, taskMap["name"].(string), claimTask["error"].(string)))
 							}
 						}
 					}
+				} else {
+					c.startTask(taskMap["id"].(string))
 				}
 
 				time.Sleep(5 * time.Second)
