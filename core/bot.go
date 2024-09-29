@@ -212,7 +212,7 @@ func (account *Account) worker(wg *sync.WaitGroup, semaphore *chan struct{}, tot
 
 	infoIp, err := client.checkIp()
 	if err != nil {
-		tools.Logger("error", fmt.Sprintf("Failed to check ip: %v", err))
+		tools.Logger("error", fmt.Sprintf("| %s | Failed to check ip: %v", account.Username, err))
 	}
 
 	if infoIp != nil {
