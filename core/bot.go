@@ -372,6 +372,10 @@ func (c *Client) autoCompleteTask(query string) float64 {
 	isAutoUpgradeStorage := config.Bool("AUTO_UPGRADE.STORAGE")
 	isAutoUpgradeHolyWater := config.Bool("AUTO_UPGRADE.HOLY_WATER")
 
+	maxSpeedLevel := config.Int("AUTO_UPGRADE.MAX_LEVEL.SPEED")
+	maxStorageLevel := config.Int("AUTO_UPGRADE.MAX_LEVEL.STORAGE")
+	maxHolyWaterLevel := config.Int("AUTO_UPGRADE.MAX_LEVEL.HOLY_WATER")
+
 	claimFarmingSeedAfter := tools.RandomNumber(config.Int("CLAIM_FARMING_SEED_AFTER.MIN"), config.Int("CLAIM_FARMING_SEED_AFTER.MAX"))
 
 	c.AccessToken = query
@@ -774,64 +778,6 @@ func (c *Client) autoCompleteTask(query string) float64 {
 		}
 	}
 
-	holyWaterTask, err := c.getTaskHolyWater()
-	if err != nil {
-		tools.Logger("error", fmt.Sprintf("| %s | Failed to get holy water task: %v", c.Account.Username, err))
-	}
-
-	if holyWaterTask != nil {
-		for _, task := range holyWaterTask {
-			taskMap := task.(map[string]interface{})
-			if taskMap["task_user"] == nil {
-				var isCompletingReferTask bool
-				friendsInfo, err := c.getFriendsInfo()
-				if err != nil {
-					tools.Logger("error", fmt.Sprintf("| %s | Failed to get friends info: %v", c.Account.Username, err))
-				}
-
-				if friendsInfo != nil {
-					if len(friendsInfo["referees"].([]interface{})) > 0 {
-						isCompletingReferTask = true
-					}
-				}
-
-				if !isCompletingReferTask && taskMap["type"].(string) == "refer" {
-					continue
-				}
-
-				taskId, err := c.startTaskHolyWater(taskMap["id"].(string))
-				if err != nil {
-					tools.Logger("error", fmt.Sprintf("| %s | Failed to start holy water task: %v", c.Account.Username, err))
-				}
-
-				if taskId != "" {
-					tools.Logger("success", fmt.Sprintf("| %s | Start Holy Water Task %s Successfully | Sleep 5s Before Claim Task...", c.Account.Username, taskMap["name"].(string)))
-
-					time.Sleep(5 * time.Second)
-
-					claimTask, err := c.claimTask(taskId)
-					if err != nil {
-						tools.Logger("error", fmt.Sprintf("| %s | Failed to claim holy water task: %v", c.Account.Username, err))
-					}
-
-					if claimTask != nil {
-						if id, exists := claimTask["id"]; exists {
-							if idStr, ok := id.(string); ok && idStr == taskId {
-								tools.Logger("success", fmt.Sprintf("| %s | Claim Task %s Successfully | Sleep 5s Before Next Task...", c.Account.Username, taskMap["name"].(string)))
-							} else {
-								tools.Logger("error", fmt.Sprintf("| %s | Task ID mismatch or not a string", c.Account.Username))
-							}
-						} else {
-							tools.Logger("error", fmt.Sprintf("| %s | 'id' key does not exist in claimTask", c.Account.Username))
-						}
-					}
-				}
-			}
-
-			time.Sleep(15 * time.Second)
-		}
-	}
-
 	if isAutoUpgradeSpeed || isAutoUpgradeStorage || isAutoUpgradeHolyWater {
 		settings, err := c.getSettings()
 		if err != nil {
@@ -844,7 +790,7 @@ func (c *Client) autoCompleteTask(query string) float64 {
 
 			if isAutoUpgradeSpeed {
 				var currentBalance float64
-				maxLevel := config.Int("AUTO_UPGRADE.MAX_LEVEL.SPEED")
+
 				balance, err = c.getBalance()
 				if err != nil {
 					tools.Logger("error", fmt.Sprintf("| %s | Failed to get balance: %v", c.Account.Username, err))
@@ -854,7 +800,7 @@ func (c *Client) autoCompleteTask(query string) float64 {
 					currentBalance = balance / 1e9
 				}
 
-				if speedSeedLevel < maxLevel {
+				if speedSeedLevel != maxSpeedLevel {
 					if speedSeedLevel < 1 {
 						speedSeedLevel = speedSeedLevel + 1
 					}
@@ -878,7 +824,6 @@ func (c *Client) autoCompleteTask(query string) float64 {
 
 			if isAutoUpgradeStorage {
 				var currentBalance float64
-				maxLevel := config.Int("AUTO_UPGRADE.MAX_LEVEL.STORAGE")
 				balance, err = c.getBalance()
 				if err != nil {
 					tools.Logger("error", fmt.Sprintf("| %s | Failed to get balance: %v", c.Account.Username, err))
@@ -888,7 +833,7 @@ func (c *Client) autoCompleteTask(query string) float64 {
 					currentBalance = balance / 1e9
 				}
 
-				if storageSeedLevel < maxLevel {
+				if storageSeedLevel != maxStorageLevel {
 					if storageSeedLevel < 1 {
 						storageSeedLevel = storageSeedLevel + 1
 					}
@@ -911,37 +856,76 @@ func (c *Client) autoCompleteTask(query string) float64 {
 			}
 
 			if isAutoUpgradeHolyWater {
-				var taskCompleted int
-				maxLevel := config.Int("AUTO_UPGRADE.MAX_LEVEL.HOLY_WATER")
-				holyWaterTask, err = c.getTaskHolyWater()
+				holyWaterTask, err := c.getTaskHolyWater()
 				if err != nil {
 					tools.Logger("error", fmt.Sprintf("| %s | Failed to get holy water task: %v", c.Account.Username, err))
 				}
 
 				if holyWaterTask != nil {
 					for _, task := range holyWaterTask {
-						taskMap := task.(map[string]interface{})
-						if taskMap["task_user"] == nil {
-							taskCompleted++
+						if taskMap, exits := task.(map[string]interface{}); exits && taskMap != nil {
+							var isCompletingReferTask bool
+							friendsInfo, err := c.getFriendsInfo()
+							if err != nil {
+								tools.Logger("error", fmt.Sprintf("| %s | Failed to get friends info: %v", c.Account.Username, err))
+							}
+
+							if friendsInfo != nil {
+								if len(friendsInfo["referees"].([]interface{})) > 0 {
+									isCompletingReferTask = true
+								}
+							}
+
+							if !isCompletingReferTask && taskMap["type"].(string) == "refer" {
+								continue
+							}
+
+							taskId, err := c.startTaskHolyWater(taskMap["id"].(string))
+							if err != nil {
+								tools.Logger("error", fmt.Sprintf("| %s | Failed to start holy water task: %v", c.Account.Username, err))
+							}
+
+							if taskId != "" {
+								tools.Logger("success", fmt.Sprintf("| %s | Start Holy Water Task %s Successfully | Sleep 5s Before Claim Task...", c.Account.Username, taskMap["name"].(string)))
+
+								time.Sleep(5 * time.Second)
+
+								claimTask, err := c.claimTask(taskId)
+								if err != nil {
+									tools.Logger("error", fmt.Sprintf("| %s | Failed to claim holy water task: %v", c.Account.Username, err))
+								}
+
+								if claimTask != nil {
+									if id, exists := claimTask["id"]; exists {
+										if idStr, ok := id.(string); ok && idStr == taskId {
+											tools.Logger("success", fmt.Sprintf("| %s | Claim Task %s Successfully | Sleep 5s Before Next Task...", c.Account.Username, taskMap["name"].(string)))
+										} else {
+											tools.Logger("error", fmt.Sprintf("| %s | Task ID mismatch or not a string", c.Account.Username))
+										}
+									} else {
+										tools.Logger("error", fmt.Sprintf("| %s | 'id' key does not exist in claimTask", c.Account.Username))
+									}
+								}
+							}
+
+							time.Sleep(15 * time.Second)
 						}
 					}
 				}
 
-				if holyWaterLevel < maxLevel {
-					if taskCompleted > holyWaterLevel {
-						upgradeHolyWater, err := c.upgradeHolyWater()
-						if err != nil {
-							tools.Logger("error", fmt.Sprintf("| %s | Failed to upgrade holy water: %v", c.Account.Username, err))
-						}
-
-						if upgradeHolyWater == "{}" {
-							tools.Logger("success", fmt.Sprintf("| %s | Upgrade Holy Water Successfully | Current Holy Water Level: %v", c.Account.Username, (holyWaterLevel+1)))
-						} else {
-							tools.Logger("error", fmt.Sprintf("| %s | Upgrade Holy Water Failed | Current Holy Water Level: %v", c.Account.Username, (holyWaterLevel)))
-						}
-					} else {
-						tools.Logger("error", fmt.Sprintf("| %s | Upgrade Holy Water Failed | Not Enough Balance...", c.Account.Username))
+				if holyWaterLevel != maxHolyWaterLevel {
+					upgradeHolyWater, err := c.upgradeHolyWater()
+					if err != nil {
+						tools.Logger("error", fmt.Sprintf("| %s | Failed to upgrade holy water: %v", c.Account.Username, err))
 					}
+
+					if upgradeHolyWater == "{}" {
+						tools.Logger("success", fmt.Sprintf("| %s | Upgrade Holy Water Successfully | Current Holy Water Level: %v", c.Account.Username, (holyWaterLevel+1)))
+					} else {
+						tools.Logger("error", fmt.Sprintf("| %s | Upgrade Holy Water Failed | Current Holy Water Level: %v", c.Account.Username, (holyWaterLevel)))
+					}
+				} else {
+					tools.Logger("error", fmt.Sprintf("| %s | Upgrade Holy Water Failed | Not Enough Balance...", c.Account.Username))
 				}
 			}
 		}
