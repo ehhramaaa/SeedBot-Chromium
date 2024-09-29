@@ -18,7 +18,7 @@ RUN go mod download
 COPY . .
 
 # Build aplikasi Go, menonaktifkan CGO dan mengoptimalkan ukuran binary
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/seed-bot .
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o seed-bot .
 
 #####################
 # FINAL IMAGE #
@@ -31,19 +31,13 @@ FROM alpine:3.16
 WORKDIR /app
 
 # Salin binary yang sudah dibangun dari tahap builder
-COPY --from=builder /app/seed-bot /app/seed-bot
-
-# Salin file konfigurasi jika dibutuhkan (hanya yang diperlukan)
-COPY . /app/
+COPY --from=builder /app/seed-bot .
 
 # Install Chromium dan dependencies lainnya
-RUN apk --no-cache add chromium
-
-# Menyertakan CA certificates jika aplikasi membutuhkan koneksi HTTPS
-RUN apk --no-cache add ca-certificates
+RUN apk --no-cache add chromium ca-certificates
 
 # Pastikan binary memiliki izin eksekusi
-RUN chmod +x /app/seed-bot
+RUN chmod +x ./seed-bot
 
 # Set entrypoint untuk menjalankan aplikasi
-ENTRYPOINT [ "/app/seed-bot" ]
+ENTRYPOINT ["./seed-bot"]

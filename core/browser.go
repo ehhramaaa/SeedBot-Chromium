@@ -76,7 +76,7 @@ func (c *Client) checkElement(page *rod.Page, selector string) bool {
 		}
 	}()
 
-	for attempt := 1; attempt <= 3; attempt++ {
+	for attempt := 1; attempt <= 2; attempt++ {
 		_, err := page.Timeout(5 * time.Second).Element(selector)
 
 		if err == nil {

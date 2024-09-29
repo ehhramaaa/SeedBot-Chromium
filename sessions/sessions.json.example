@@ -1,0 +1,22 @@
+[
+    {
+      "auth_key_fingerprint": "\"\"",
+      "dc": "",
+      "dc1_auth_key": "\"\"",
+      "dc1_server_salt": "\"\"",
+      "dc2_auth_key": "\"\"",
+      "dc2_server_salt": "\"\"",
+      "dc3_auth_key": "\"\"",
+      "dc3_server_salt": "\"\"",
+      "dc4_auth_key": "\"\"",
+      "dc4_server_salt": "\"\"",
+      "dc5_auth_key": "\"\"",
+      "dc5_server_salt": "\"\"",
+      "k_build": "",
+      "server_time_offset": "0",
+      "state_id": "",
+      "tgme_sync": "{\"\":,\"\":}",
+      "user_auth": "{\"\":,\"\":,\"\":}",
+      "xt_instance": "{\"\":,\"\":,\"\":}"
+    }
+  ]

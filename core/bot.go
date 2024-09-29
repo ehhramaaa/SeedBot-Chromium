@@ -105,25 +105,27 @@ func (account *Account) worker(wg *sync.WaitGroup, semaphore *chan struct{}, tot
 
 	setDns(&net.Dialer{})
 
-	browser := initializeBrowser()
-
-	defer browser.MustClose()
-
 	client := Client{
 		Account: *account,
-		Browser: browser,
 	}
 
 	var queryData string
 	resultChan := make(chan string, 1)
 	errChan := make(chan error, 1)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
 	var querySuccess bool
 
 	for i := 0; i < 3; i++ {
-		go func() {
+		browser := initializeBrowser()
+
+		defer browser.MustClose()
+
+		client.Browser = browser
+
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+
+		go func(ctx context.Context) {
 			defer func() {
 				if r := recover(); r != nil {
 					tools.Logger("error", fmt.Sprintf("| %s | Panic recovered while getting query data: %v", account.Phone, r))
@@ -131,45 +133,58 @@ func (account *Account) worker(wg *sync.WaitGroup, semaphore *chan struct{}, tot
 				}
 			}()
 
-			query, err := client.getQueryData(session)
-			if err != nil {
-				errChan <- err
+			select {
+			case <-ctx.Done():
+				tools.Logger("warning", fmt.Sprintf("| %s | Context cancelled, stopping query attempt.", account.Phone))
 				return
+			default:
+				query, err := client.getQueryData(session)
+				if err != nil {
+					errChan <- err
+					return
+				}
+				resultChan <- query
 			}
-			resultChan <- query
-		}()
+		}(ctx)
 
 		select {
 		case <-ctx.Done():
-			tools.Logger("error", fmt.Sprintf("| %s | Timeout during getQueryData", account.Phone))
+			tools.Logger("error", fmt.Sprintf("| %s | Timeout during getQueryData | Try to get query data again...", account.Phone))
 			browser.MustClose()
-			return
+
+			time.Sleep(3 * time.Second)
+
+			continue
 
 		case result := <-resultChan:
 			queryData = result
 			querySuccess = true
-			break
 
 		case err := <-errChan:
 			tools.Logger("error", fmt.Sprintf("| %s | Error while getting query data: %v", account.Phone, err))
-			if i < 2 {
-				tools.Logger("warning", fmt.Sprintf("| %s | Retry attempt %d after 2s...", account.Phone, i+1))
-				time.Sleep(2 * time.Second)
-			} else {
-				tools.Logger("error", fmt.Sprintf("| %s | Failed to get query data after %d attempts", account.Phone, i+1))
-				browser.MustClose()
-				return
-			}
+			browser.MustClose()
+
+			time.Sleep(3 * time.Second)
+
+			continue
 		}
 
 		if querySuccess {
+			tools.Logger("info", fmt.Sprintf("| %s | Get Query Data Successfully...", account.Phone))
+			break
+		}
+
+		if i == 2 {
+			tools.Logger("error", fmt.Sprintf("| %s | Failed get query data after 3 attempts!", account.Phone))
 			break
 		}
 	}
 
-	tools.Logger("info", fmt.Sprintf("| %s | Get Query Data Successfully...", account.Phone))
-
-	account.QueryData = queryData
+	if queryData != "" {
+		account.QueryData = queryData
+	} else {
+		return
+	}
 
 	account.parsingQueryData()
 
@@ -218,6 +233,8 @@ func (c *Client) checkIp() (map[string]interface{}, error) {
 }
 
 func (c *Client) getQueryData(session fs.DirEntry) (string, error) {
+	defer c.Browser.MustClose()
+
 	// Set Local Storage
 	sessionsPath := "sessions"
 	sessionsExpired := "sessions/expired"
@@ -272,7 +289,7 @@ func (c *Client) getQueryData(session fs.DirEntry) (string, error) {
 			os.Mkdir(sessionsExpired, 0755)
 		}
 
-		os.Rename(filepath.Join(sessionsExpired, session.Name()), filepath.Join(sessionsExpired, session.Name()))
+		os.Rename(filepath.Join(sessionsPath, session.Name()), filepath.Join(sessionsExpired, session.Name()))
 
 		return "", fmt.Errorf("session expired or account banned")
 	}
@@ -305,11 +322,8 @@ func (c *Client) getQueryData(session fs.DirEntry) (string, error) {
 
 	iframePage := iframe.MustFrame()
 
-	iframePage.MustWaitDOMStable()
-
 	tools.Logger("info", fmt.Sprintf("| %s | Process Get Query Data...", c.Account.Phone))
 
-	// Mengeksekusi JavaScript untuk mendapatkan nilai dari sessiontorage
 	res, err := iframePage.Evaluate(rod.Eval(`() => {
 			let initParams = sessionStorage.getItem("__telegram__initParams");
 			if (initParams) {
@@ -598,132 +612,14 @@ func (c *Client) autoCompleteTask(query string) float64 {
 
 								if feedBird != nil {
 									if feedBird != nil {
-										tools.Logger("success", fmt.Sprintf("| %s | Feed Bird Successfully | Current Energy: %v | Max Energy: %v", c.Account.Username, (feedBird["energy_level"].(float64)/100), (feedBird["energy_max"].(float64)/100)))
+										tools.Logger("success", fmt.Sprintf("| %s | Feed Bird Successfully | Current Energy: %v | Max Energy: %v", c.Account.Username, int(feedBird["energy_level"].(float64)/1e9), int(feedBird["energy_max"].(float64)/1e9)))
 									}
 								}
-
 							}
 						}
 					}
 				}
 			}
-		}
-	}
-
-	mainTask, err := c.getTasks()
-	if err != nil {
-		tools.Logger("error", fmt.Sprintf("| %s | Failed to get tasks: %v", c.Account.Username, err))
-	}
-
-	if mainTask != nil {
-		for _, task := range mainTask {
-			if task != nil {
-
-				taskMap := task.(map[string]interface{})
-				taskId, err := c.startTask(taskMap["id"].(string))
-				if err != nil {
-					tools.Logger("error", fmt.Sprintf("| %s | Failed to start task: %v", c.Account.Username, err))
-				}
-
-				if taskId != "" {
-					tools.Logger("success", fmt.Sprintf("| %s | Start Task %s Successfully | Sleep 5s Before Claim Task...", c.Account.Username, taskMap["name"].(string)))
-
-					time.Sleep(5 * time.Second)
-
-					claimTask, err := c.claimTask(taskId)
-					if err != nil {
-						tools.Logger("error", fmt.Sprintf("| %s | Failed to claim task: %v", c.Account.Username, err))
-					}
-
-					if claimTask != nil {
-						if status, exits := claimTask["data"].(map[string]interface{}); exits {
-							if status["completed"].(bool) {
-								tools.Logger("success", fmt.Sprintf("| %s | Claim Task %s Successfully | Sleep 15s Before Next Task...", c.Account.Username, taskMap["name"].(string)))
-							}
-						} else {
-							tools.Logger("error", fmt.Sprintf("| %s | Claim Task %s Failed | Status: %s | You Can Try Manual | Sleep 15s Before Next Task...", c.Account.Username, taskMap["name"].(string), claimTask["error"].(string)))
-						}
-					}
-				}
-
-				taskUser := taskMap["task_user"].(map[string]interface{})
-				if !taskUser["completed"].(bool) {
-					claimTask, err := c.claimTask(taskUser["id"].(string))
-					if err != nil {
-						tools.Logger("error", fmt.Sprintf("| %s | Failed to claim task %s: %v", c.Account.Username, taskMap["name"].(string), err))
-					}
-
-					if claimTask != nil {
-						if status, exits := claimTask["data"].(map[string]interface{}); exits {
-							if status["completed"].(bool) {
-								tools.Logger("success", fmt.Sprintf("| %s | Claim Task %s Successfully | Sleep 15s Before Next Task...", c.Account.Username, taskMap["name"].(string)))
-							}
-						} else {
-							tools.Logger("error", fmt.Sprintf("| %s | Claim Task %s Failed | Status: %s | You Can Try Manual | Sleep 15s Before Next Task...", c.Account.Username, taskMap["name"].(string), claimTask["error"].(string)))
-						}
-					}
-				}
-
-				time.Sleep(15 * time.Second)
-			}
-		}
-	}
-
-	holyWaterTask, err := c.getTaskHolyWater()
-	if err != nil {
-		tools.Logger("error", fmt.Sprintf("| %s | Failed to get holy water task: %v", c.Account.Username, err))
-	}
-
-	if holyWaterTask != nil {
-		for _, task := range holyWaterTask {
-			taskMap := task.(map[string]interface{})
-			if taskMap["task_user"] == nil {
-				var isCompletingReferTask bool
-				friendsInfo, err := c.getFriendsInfo()
-				if err != nil {
-					tools.Logger("error", fmt.Sprintf("| %s | Failed to get friends info: %v", c.Account.Username, err))
-				}
-
-				if friendsInfo != nil {
-					if len(friendsInfo["referees"].([]interface{})) > 0 {
-						isCompletingReferTask = true
-					}
-				}
-
-				if !isCompletingReferTask && taskMap["type"].(string) == "refer" {
-					continue
-				}
-
-				taskId, err := c.startTaskHolyWater(taskMap["id"].(string))
-				if err != nil {
-					tools.Logger("error", fmt.Sprintf("| %s | Failed to start holy water task: %v", c.Account.Username, err))
-				}
-
-				if taskId != "" {
-					tools.Logger("success", fmt.Sprintf("| %s | Start Holy Water Task %s Successfully | Sleep 15s Before Claim Task...", c.Account.Username, taskMap["name"].(string)))
-
-					time.Sleep(15 * time.Second)
-
-					claimTask, err := c.claimTask(taskId)
-					if err != nil {
-						tools.Logger("error", fmt.Sprintf("| %s | Failed to claim holy water task: %v", c.Account.Username, err))
-					}
-
-					if claimTask != nil {
-						if id, exists := claimTask["id"]; exists {
-							if idStr, ok := id.(string); ok && idStr == taskId {
-								tools.Logger("success", fmt.Sprintf("| %s | Claim Task %s Successfully | Sleep 15s Before Next Task...", c.Account.Username, taskMap["name"].(string)))
-							} else {
-								tools.Logger("error", fmt.Sprintf("| %s | Task ID mismatch or not a string", c.Account.Username))
-							}
-						} else {
-							tools.Logger("error", fmt.Sprintf("| %s | 'id' key does not exist in claimTask", c.Account.Username))
-						}
-					}
-				}
-			}
-
-			time.Sleep(15 * time.Second)
 		}
 	}
 
@@ -765,7 +661,7 @@ func (c *Client) autoCompleteTask(query string) float64 {
 					time.Sleep(3 * time.Second)
 				}
 
-				if int(birdStatus["energy_level"].(float64)/1e9) > 0 {
+				if birdStatus["energy_level"].(float64) > 0 {
 					startBirdHunt, err := c.startBirdHunt(birdStatus["id"].(string), int(birdStatus["task_level"].(float64)))
 					if err != nil {
 						tools.Logger("error", fmt.Sprintf("| %s | Start Bird Hunt Failed: %v", c.Account.Username, err))
@@ -774,9 +670,9 @@ func (c *Client) autoCompleteTask(query string) float64 {
 					if startBirdHunt != nil {
 						huntEnd, err := time.Parse(time.RFC3339, startBirdHunt["hunt_end_at"].(string))
 						if err != nil {
-							tools.Logger("success", fmt.Sprintf("| %s | Bird Hunt Successfully | Claim Reward After: %v", c.Account.Username, startBirdHunt["hunt_end_at"].(string)))
+							tools.Logger("success", fmt.Sprintf("| %s | Start Bird Hunt Successfully | Claim Reward After: %v", c.Account.Username, startBirdHunt["hunt_end_at"].(string)))
 						} else {
-							tools.Logger("success", fmt.Sprintf("| %s | Bird Hunt Successfully | Claim Reward After: %vs", c.Account.Username, (huntEnd.Unix()-time.Now().Unix())))
+							tools.Logger("success", fmt.Sprintf("| %s | Start Bird Hunt Successfully | Claim Reward After: %vs", c.Account.Username, (huntEnd.Unix()-time.Now().Unix())))
 						}
 					}
 				} else {
@@ -831,6 +727,113 @@ func (c *Client) autoCompleteTask(query string) float64 {
 					}
 				}
 			}
+		}
+	}
+
+	mainTask, err := c.getTasks()
+	if err != nil {
+		tools.Logger("error", fmt.Sprintf("| %s | Failed to get tasks: %v", c.Account.Username, err))
+	}
+
+	if mainTask != nil {
+		for _, task := range mainTask {
+			if task != nil {
+				taskMap := task.(map[string]interface{})
+
+				taskUser := taskMap["task_user"].(map[string]interface{})
+				if taskUser == nil {
+					c.startTask(taskMap["id"].(string))
+				}
+
+				if !taskUser["completed"].(bool) {
+
+					taskId, err := c.startTask(taskMap["id"].(string))
+					if err != nil {
+						tools.Logger("error", fmt.Sprintf("| %s | Failed to start task: %v", c.Account.Username, err))
+					}
+
+					if taskId != "" {
+						tools.Logger("success", fmt.Sprintf("| %s | Start Task %s Successfully | Sleep 5s Before Claim Task...", c.Account.Username, taskMap["name"].(string)))
+
+						time.Sleep(5 * time.Second)
+
+						claimTask, err := c.claimTask(taskId)
+						if err != nil {
+							tools.Logger("error", fmt.Sprintf("| %s | Failed to claim task: %v", c.Account.Username, err))
+						}
+
+						if claimTask != nil {
+							if status, exits := claimTask["data"].(map[string]interface{}); exits {
+								if status["completed"].(bool) {
+									tools.Logger("success", fmt.Sprintf("| %s | Claim Task %s Successfully | Sleep 5s Before Next Task...", c.Account.Username, taskMap["name"].(string)))
+								}
+							} else {
+								tools.Logger("error", fmt.Sprintf("| %s | Claim Task %s Failed | Status: %s | You Can Try Manual | Sleep 5s Before Next Task...", c.Account.Username, taskMap["name"].(string), claimTask["error"].(string)))
+							}
+						}
+					}
+				}
+
+				time.Sleep(5 * time.Second)
+			}
+		}
+	}
+
+	holyWaterTask, err := c.getTaskHolyWater()
+	if err != nil {
+		tools.Logger("error", fmt.Sprintf("| %s | Failed to get holy water task: %v", c.Account.Username, err))
+	}
+
+	if holyWaterTask != nil {
+		for _, task := range holyWaterTask {
+			taskMap := task.(map[string]interface{})
+			if taskMap["task_user"] == nil {
+				var isCompletingReferTask bool
+				friendsInfo, err := c.getFriendsInfo()
+				if err != nil {
+					tools.Logger("error", fmt.Sprintf("| %s | Failed to get friends info: %v", c.Account.Username, err))
+				}
+
+				if friendsInfo != nil {
+					if len(friendsInfo["referees"].([]interface{})) > 0 {
+						isCompletingReferTask = true
+					}
+				}
+
+				if !isCompletingReferTask && taskMap["type"].(string) == "refer" {
+					continue
+				}
+
+				taskId, err := c.startTaskHolyWater(taskMap["id"].(string))
+				if err != nil {
+					tools.Logger("error", fmt.Sprintf("| %s | Failed to start holy water task: %v", c.Account.Username, err))
+				}
+
+				if taskId != "" {
+					tools.Logger("success", fmt.Sprintf("| %s | Start Holy Water Task %s Successfully | Sleep 5s Before Claim Task...", c.Account.Username, taskMap["name"].(string)))
+
+					time.Sleep(5 * time.Second)
+
+					claimTask, err := c.claimTask(taskId)
+					if err != nil {
+						tools.Logger("error", fmt.Sprintf("| %s | Failed to claim holy water task: %v", c.Account.Username, err))
+					}
+
+					if claimTask != nil {
+						if id, exists := claimTask["id"]; exists {
+							if idStr, ok := id.(string); ok && idStr == taskId {
+								tools.Logger("success", fmt.Sprintf("| %s | Claim Task %s Successfully | Sleep 5s Before Next Task...", c.Account.Username, taskMap["name"].(string)))
+							} else {
+								tools.Logger("error", fmt.Sprintf("| %s | Task ID mismatch or not a string", c.Account.Username))
+							}
+						} else {
+							tools.Logger("error", fmt.Sprintf("| %s | 'id' key does not exist in claimTask", c.Account.Username))
+						}
+					}
+				}
+			}
+
+			time.Sleep(15 * time.Second)
 		}
 	}
 

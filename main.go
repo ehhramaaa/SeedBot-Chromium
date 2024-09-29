@@ -11,15 +11,10 @@ import (
 
 func init() {
 	configPath := "configs"
-	queryPath := "configs/query.txt"
 	proxyPath := "configs/proxy.txt"
 
 	if !tools.CheckFileOrFolderExits(configPath) {
 		os.MkdirAll(configPath, os.ModeDir)
-	}
-
-	if !tools.CheckFileOrFolderExits(queryPath) {
-		os.Create(queryPath)
 	}
 
 	if !tools.CheckFileOrFolderExits(proxyPath) {
