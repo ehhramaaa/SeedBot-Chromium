@@ -6,15 +6,25 @@
 
 # 🔥🔥 Seed Bot Auto Get Query Data, Auto Claim And Auto Completing Task 🔥🔥
 
+### Tested on Windows and Docker Alpine Os with a 4-core CPU using 5 threads.
+
+**Go Version Tested 1.23.1**
+
 ## Recommendation before use
 
-### Tested in windows and linux
-#### Go Version >= 1.23
-#### The thread usage depends on your system specifications, as this uses a browser and may feel heavy on lower-spec systems.
-#### Rename config.yml.example to config.yml.
-#### Place your browser session local storage .json file in the sessions folder.
-#### If you want to use a custom browser, set the browser path in config.yml.
-#### It is recommended to use an IP info token to improve request efficiency when checking IPs.
+#### The thread usage depends on your system specifications, as this utilizes a browser and may feel heavy on lower-spec systems. However, it only uses resources for the get query data; afterwards, the browser will close and won’t consume much more resources.
+
+## Prerequisites 📚
+
+Before you begin, make sure you have the following installed:
+
+- [Golang](https://go.dev/doc/install) Must >= 1.23.
+
+- #### Rename config.yml.example to config.yml.
+- #### Place your browser session local storage .json file in the sessions folder.
+- #### If you don’t have a local storage session, you can obtain it from [Telegram Web Tools](https://github.com/ehhramaaa/telegram-web-tools)
+- #### If you want to use a custom browser, set the browser path in config.yml.
+- #### It is recommended to use an IP info token to improve request efficiency when checking IPs.
 
 ## Features
 
@@ -47,6 +57,9 @@
 
 |               Settings                |                             Description                             |
 | :-----------------------------------: | :-----------------------------------------------------------------: |
+|             **USE_PROXY**             |     Using proxy for doing completing all except get query data      |
+|           **BROWSER_PATH**            |                         For Custom Browser                          |
+|           **IPINFO_TOKEN**            |       For Increase Check Ip Efficiency Put Your Token If Have       |
 |          **AUTO_FEED_BIRD**           |                  Auto Feed Bird If Worm Available                   |
 |          **AUTO_BIRD_HUNT**           |                 Auto Bird Hunt If Energy Available                  |
 |          **AUTO_HATCH_EGG**           |              Auto Hatch Egg If Available In Inventory               |
@@ -59,12 +72,6 @@
 |  **AUTO_UPGRADE.MAX_LEVEL.STORAGE**   |                Max Upgrade Level Amount For Storage                 |
 | **AUTO_UPGRADE.MAX_LEVEL.HOLY_WATER** |               Max Upgrade Level Amount For Holy Water               |
 |           **RANDOM_SLEEP**            |    Delay Before The Next Lap (e.g. MIN:3600, MAX:7200) In Second    |
-
-## Prerequisites 📚
-
-Before you begin, make sure you have the following installed:
-
-- [Golang](https://go.dev/doc/install) **Go Version Tested 1.23.1**
 
 ## Installation
 
