@@ -1,6 +1,6 @@
 version: '3'
 services:
-  binance-moon-bix:
+  seed-bot:
     image: seed-bot
     container_name: seed-bot
     restart: on-failure

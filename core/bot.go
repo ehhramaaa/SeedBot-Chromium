@@ -157,8 +157,12 @@ func (account *Account) worker(wg *sync.WaitGroup, semaphore *chan struct{}, tot
 			continue
 
 		case result := <-resultChan:
-			queryData = result
-			querySuccess = true
+			if result != "" {
+				queryData = result
+				querySuccess = true
+			} else {
+				continue
+			}
 
 		case err := <-errChan:
 			tools.Logger("error", fmt.Sprintf("| %s | Error while getting query data: %v", account.Phone, err))
@@ -577,7 +581,7 @@ func (c *Client) autoCompleteTask(query string) float64 {
 			if catchWorm != nil {
 				tools.Logger("success", fmt.Sprintf("| %s | Catch Worm Successfully | Worm Type: %s | Catch Status: %s", c.Account.Username, catchWorm["type"].(string), catchWorm["status"].(string)))
 			} else {
-				tools.Logger("warning", fmt.Sprintf("| %s | Catch Worm Failed | Worm Type: %s | Catch Status: %s", c.Account.Username, catchWorm["type"].(string), catchWorm["status"].(string)))
+				tools.Logger("warning", fmt.Sprintf("| %s | Catch Worm Failed...", c.Account.Username))
 			}
 		} else {
 			tools.Logger("info", fmt.Sprintf("| %s | Catch Worm After: %v", c.Account.Username, wormStatus["ended_at"]))

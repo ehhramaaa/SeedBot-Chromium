@@ -36,6 +36,8 @@ COPY --from=builder /app/seed-bot .
 # Install Chromium dan dependencies lainnya
 RUN apk --no-cache add chromium ca-certificates
 
+COPY . .
+
 # Pastikan binary memiliki izin eksekusi
 RUN chmod +x ./seed-bot
 

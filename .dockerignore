@@ -1,3 +1,4 @@
 *.example
+sessions/sessions.json.example
 build
 demo
