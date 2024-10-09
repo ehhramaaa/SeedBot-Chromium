@@ -92,14 +92,11 @@ func (account *Account) parsingQueryData() {
 }
 
 func (account *Account) worker(wg *sync.WaitGroup, semaphore *chan struct{}, totalPointsChan *chan float64, index int, session fs.DirEntry, proxyList []string) {
-	defer tools.HandleRecover()
 	defer wg.Done()
 	*semaphore <- struct{}{}
-	defer func() {
-		<-*semaphore
-	}()
 
 	var points float64
+	var proxy string
 
 	tools.Logger("info", fmt.Sprintf("| %s | Starting Bot...", account.Phone))
 
@@ -193,13 +190,13 @@ func (account *Account) worker(wg *sync.WaitGroup, semaphore *chan struct{}, tot
 	account.parsingQueryData()
 
 	if len(proxyList) > 0 {
-		client.Proxy = proxyList[index%len(proxyList)]
+		proxy = proxyList[index%len(proxyList)]
 	}
 
 	client.Account = *account
-
+	client.Proxy = proxy
 	client.HttpClient = &http.Client{
-		Timeout: 15,
+		Timeout: 30 * time.Second,
 	}
 
 	if len(client.Proxy) > 0 {
@@ -213,7 +210,7 @@ func (account *Account) worker(wg *sync.WaitGroup, semaphore *chan struct{}, tot
 
 	infoIp, err := client.checkIp()
 	if err != nil {
-		tools.Logger("error", fmt.Sprintf("| %s | Failed to check ip: %v", account.Username, err))
+		tools.Logger("error", fmt.Sprintf("Failed to check ip: %v", err))
 	}
 
 	if infoIp != nil {
@@ -221,10 +218,8 @@ func (account *Account) worker(wg *sync.WaitGroup, semaphore *chan struct{}, tot
 	}
 
 	points = client.autoCompleteTask(queryData)
-
-	defer func() {
-		*totalPointsChan <- points
-	}()
+	*totalPointsChan <- points
+	<-*semaphore
 }
 
 func (c *Client) checkIp() (map[string]interface{}, error) {
