@@ -92,6 +92,7 @@ func (account *Account) parsingQueryData() {
 }
 
 func (account *Account) worker(wg *sync.WaitGroup, semaphore *chan struct{}, totalPointsChan *chan float64, index int, session fs.DirEntry, proxyList []string) {
+	defer tools.HandleRecover()
 	defer wg.Done()
 	*semaphore <- struct{}{}
 	defer func() {

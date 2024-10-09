@@ -94,7 +94,7 @@ Or
 ```shell
 go run main.go
 ```
-
+2,7,18,19,23,25
 ## Or you can do build application by typing:
 
 Windows:

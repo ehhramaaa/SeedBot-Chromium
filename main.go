@@ -23,7 +23,7 @@ func init() {
 }
 
 func main() {
-	defer tools.HandleRecover()
+	defer tools.ExitRecover()
 
 	tools.PrintLogo()
 

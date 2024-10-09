@@ -12,6 +12,7 @@ import (
 )
 
 func LaunchBot() {
+	defer tools.HandleRecover()
 	sessionsPath := "sessions"
 	proxyPath := "configs/proxy.txt"
 	maxThread := config.Int("MAX_THREAD")
@@ -51,9 +52,9 @@ func LaunchBot() {
 		semaphore = make(chan struct{}, maxThread)
 	}
 
-	totalPointsChan := make(chan float64, len(sessionList))
-
 	for {
+		totalPointsChan := make(chan float64, len(sessionList))
+
 		for index, session := range sessionList {
 			wg.Add(1)
 			account := &Account{
@@ -62,8 +63,11 @@ func LaunchBot() {
 
 			go account.worker(&wg, &semaphore, &totalPointsChan, index, session, proxyList)
 		}
-		wg.Wait()
-		close(totalPointsChan)
+
+		go func() {
+			wg.Wait()
+			close(totalPointsChan)
+		}()
 
 		var totalPoints float64
 
